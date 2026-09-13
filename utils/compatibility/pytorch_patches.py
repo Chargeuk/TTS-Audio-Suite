@@ -6,6 +6,7 @@ Critical: Global monkey-patching of torchaudio.save/load for PyTorch 2.9 TorchCo
 """
 
 import warnings
+import os
 from typing import Optional
 
 
@@ -90,6 +91,10 @@ class PyTorchPatches:
         This fixes ALL direct torchaudio.save/load calls across the entire codebase without
         needing individual fixes in every file.
         """
+        # This legacy workaround changes process-wide audio semantics, including
+        # frame slicing and normalization. Keep the working Mac APIs untouched.
+        if os.environ.get("TTS_AUDIO_SUITE_ALLOW_GLOBAL_AUDIO_PATCH") != "1":
+            return
         if "torchaudio_torchcodec" in cls._patches_applied:
             return
 
