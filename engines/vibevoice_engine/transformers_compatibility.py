@@ -61,6 +61,7 @@ def import_vibevoice_with_transformers5_compatibility():
         auto_class: auto_class.__dict__.get("register") for auto_class in registrations
     }
 
+    patched_registrations = []
     if _is_transformers_5_or_newer():
         for auto_class in registrations:
             original_register = originals[auto_class]
@@ -70,6 +71,7 @@ def import_vibevoice_with_transformers5_compatibility():
                 return _original(config_class, model_class, exist_ok=exist_ok or is_vibevoice)
 
             auto_class.register = compatible_register
+            patched_registrations.append(auto_class)
 
     try:
         from vibevoice.modular.modeling_vibevoice_inference import (
@@ -77,7 +79,9 @@ def import_vibevoice_with_transformers5_compatibility():
         )
         from vibevoice.processor.vibevoice_processor import VibeVoiceProcessor
     finally:
-        for auto_class, original_descriptor in original_descriptors.items():
+        # T4 keeps the inherited registration method; only undo T5 overrides.
+        for auto_class in patched_registrations:
+            original_descriptor = original_descriptors[auto_class]
             if original_descriptor is None:
                 delattr(auto_class, "register")
             else:
