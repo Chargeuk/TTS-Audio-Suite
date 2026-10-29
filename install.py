@@ -1238,17 +1238,15 @@ class TTSAudioInstaller:
                 self.log("Windows Fix: Install Visual C++ Build Tools or use a compatible Python version", "INFO")
                 self.log("This is often due to missing pre-built wheels for your Python version", "INFO")
 
-        # Now install VibeVoice with --no-deps to prevent downgrades
-        # NOTE: Using FushionHub fork temporarily - Microsoft removed the official repo
-        # Original: https://github.com/microsoft/VibeVoice.git (no longer exists)
-        # This fork maintains the same API and should work identically
-        self.log("Installing VibeVoice with --no-deps to prevent package downgrades", "WARNING")
+        # Use the source whose current Transformers compatibility was validated
+        # with this suite; let its repaired metadata participate in resolution.
+        self.log("Installing validated VibeVoice source", "INFO")
         if self.check_package_installed("vibevoice"):
             self.log("VibeVoice already satisfied - skipping", "SUCCESS")
         else:
             self.run_pip_command(
-                ["install", "git+https://github.com/FushionHub/VibeVoice.git", "--no-deps"],
-                "Installing VibeVoice (--no-deps)",
+                ["install", "git+https://github.com/Chargeuk/VibeVoice.git@02f82d5e24597c694a01fecd09349923a7edfba1"],
+                "Installing validated VibeVoice",
                 ignore_errors=True
             )
 
@@ -1275,7 +1273,7 @@ class TTSAudioInstaller:
             )
 
     def install_dots_tts(self):
-        """Install official Dots TTS with minimal dependency impact."""
+        """Install the suite's compatible Dots TTS source."""
         self.log("Installing Dots TTS engine", "INFO")
 
         dependency_probes = [
@@ -1310,8 +1308,7 @@ class TTSAudioInstaller:
 
         dots_install_args = [
             "install",
-            "git+https://github.com/rednote-hilab/dots.tts.git",
-            "--no-deps",
+            "git+https://github.com/Chargeuk/dots.tts.git@3abf4e73f45b94afe58e1d602dcb33fdbb4fbc9a",
         ]
         if self.is_python_313:
             # Dots currently declares <3.13, although its source works in the
@@ -1325,18 +1322,19 @@ class TTSAudioInstaller:
 
         self.run_pip_command(
             dots_install_args,
-            "Installing official dots.tts from GitHub (--no-deps)",
+            "Installing validated dots.tts source",
             ignore_errors=True
         )
 
     def install_fish_audio_s2(self):
-        """Install Fish S2 without changing the suite's core ML stack."""
+        """Install the tested Fish S2 source with normal dependency resolution."""
         self.log("Installing Fish Audio S2 support in the main T5 environment", "INFO")
 
-        # The adapter uses Fish's official inference_engine API. Pin the tested
-        # S2 release because distribution metadata alone cannot verify that API.
-        fish_repository = "https://github.com/fishaudio/fish-speech.git"
-        fish_revision = "v2.0.0-beta"
+        # The tested source includes S2's inference subpackages in its wheel.
+        # Immutable Git URLs preserve reinstall provenance without a temporary
+        # checkout recorded as the installed package's direct_url.
+        fish_source = "git+https://github.com/Chargeuk/fish-speech.git@fdadb2d13e032393ec2551bff7de8b0cd63d84fe"
+        audio_tools_source = "git+https://github.com/Chargeuk/audiotools.git@073ab2c1fc7a1e0cadb5d1d58d92f3410080ebff"
         fish_runtime_module = "fish_speech.inference_engine"
 
         packages = [
@@ -1370,49 +1368,11 @@ class TTSAudioInstaller:
                 "WARNING",
             )
 
-        # The upstream beta pyproject packages only fish_speech itself, so its
-        # wheel omits fish_speech.inference_engine. Install the wheel for its
-        # metadata, then restore the complete official source package.
-        with tempfile.TemporaryDirectory(prefix="tts_fish_s2_") as temp_dir:
-            source_dir = Path(temp_dir) / "fish-speech"
-            env = os.environ.copy()
-            if self.is_windows:
-                env["PYTHONUTF8"] = "1"
-                env["PYTHONIOENCODING"] = "utf-8"
-
-            self.log("Downloading tested Fish S2 source revision...", "INSTALL")
-            try:
-                clone_result = subprocess.run(
-                    [
-                        "git",
-                        "clone",
-                        "--depth",
-                        "1",
-                        "--branch",
-                        fish_revision,
-                        fish_repository,
-                        str(source_dir),
-                    ],
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8" if self.is_windows else None,
-                    errors="replace" if self.is_windows else None,
-                    check=True,
-                    env=env,
-                )
-                if clone_result.stdout.strip():
-                    print(clone_result.stdout)
-            except (OSError, subprocess.CalledProcessError) as error:
-                details = getattr(error, "stderr", None) or str(error)
-                self.log(f"Fish S2 source download failed: {details.strip()}", "ERROR")
-            else:
-                installed = self.run_pip_command(
-                    ["install", "--upgrade", "--force-reinstall", str(source_dir), "--no-deps"],
-                    "Installing tested Fish S2 runtime from GitHub (--no-deps)",
-                    ignore_errors=True,
-                )
-                if installed:
-                    self._restore_fish_source_package(source_dir)
+        self.run_pip_command(
+            ["install", "--upgrade", fish_source, audio_tools_source],
+            "Installing validated Fish S2 runtime and AudioTools source",
+            ignore_errors=True,
+        )
 
         if self.module_available(fish_runtime_module):
             self.log("Fish S2 inference runtime installed successfully", "SUCCESS")

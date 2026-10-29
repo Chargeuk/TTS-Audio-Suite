@@ -57,7 +57,7 @@ RUNTIME_PROFILES: Dict[str, RuntimeProfile] = {
         inherit_base_site_packages=True,
         pip_packages=list(_VIBEVOICE_T4_PACKAGES),
         pip_packages_no_deps=[
-            "git+https://github.com/FushionHub/VibeVoice.git",
+            "git+https://github.com/Chargeuk/VibeVoice.git@02f82d5e24597c694a01fecd09349923a7edfba1",
         ],
     ),
 
