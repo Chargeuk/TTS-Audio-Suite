@@ -275,7 +275,10 @@ def _launch_llama_queue(model_path, model_variant, quantization, device, precisi
                 "Fish S2 FP8 requires CUDA compute capability 8.9 or newer"
             )
 
-        def init_fp8(checkpoint_path, device, precision, compile=False):
+        def init_fp8(checkpoint_path, device, precision, compile=False, reference_sampling=None):
+            # Fish 3 forwards this option even for the existing S2 family.
+            if reference_sampling is not None:
+                raise ValueError("Fish S2 FP8 does not support Drama 3 reference sampling")
             from fish_speech.models.text2semantic.inference import decode_one_token_ar
             from utils.runtimes.fish_audio_s2_fp8 import load_fp8_model
 
@@ -288,7 +291,9 @@ def _launch_llama_queue(model_path, model_variant, quantization, device, precisi
         if not str(device).startswith("cuda") or not torch.cuda.is_available():
             raise RuntimeError("Fish S2 BNB quantization requires an NVIDIA CUDA GPU")
 
-        def init_bnb(checkpoint_path, device, precision, compile=False):
+        def init_bnb(checkpoint_path, device, precision, compile=False, reference_sampling=None):
+            if reference_sampling is not None:
+                raise ValueError("Fish S2 BNB does not support Drama 3 reference sampling")
             from fish_speech.models.text2semantic.inference import decode_one_token_ar
             from utils.runtimes.fish_audio_s2_bnb import quantize_linear_layers
 

@@ -57,3 +57,43 @@ def test_removed_torchaudio_backend_probe_is_restored_temporarily(monkeypatch):
     WORKER_MODULE._patch_removed_torchaudio_backend_probe()
 
     assert fake_torchaudio.list_audio_backends() == []
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("variant,quantization", [("s2-pro-fp8", "none"), ("s2-pro", "bnb_int8")])
+def test_quantized_s2_loaders_accept_fish3_queue_contract(monkeypatch, variant, quantization):
+    model = SimpleNamespace(to=lambda **kwargs: model, eval=lambda: model)
+    packages = {}
+    for name in ("fish_speech", "fish_speech.models", "fish_speech.models.text2semantic"):
+        package = types.ModuleType(name)
+        package.__path__ = []
+        packages[name] = package
+        monkeypatch.setitem(sys.modules, name, package)
+        parent, _, attr = name.rpartition(".")
+        if parent:
+            setattr(packages[parent], attr, package)
+    llama = types.ModuleType("fish_speech.models.text2semantic.llama")
+    original_from_pretrained = lambda *args, **kwargs: model
+    llama.DualARTransformer = type("DualARTransformer", (), {"from_pretrained": staticmethod(original_from_pretrained)})
+    inference = types.ModuleType("fish_speech.models.text2semantic.inference")
+    original_init = lambda *args, **kwargs: None
+    inference.init_model = original_init
+    inference.decode_one_token_ar = object()
+    def launch(**kwargs):
+        loaded, _ = inference.init_model(kwargs["checkpoint_path"], kwargs["device"], kwargs["precision"], compile=kwargs["compile"], reference_sampling=None)
+        return loaded
+    inference.launch_thread_safe_queue = launch
+    for module in (llama, inference):
+        monkeypatch.setitem(sys.modules, module.__name__, module)
+        setattr(packages["fish_speech.models.text2semantic"], module.__name__.rsplit(".", 1)[-1], module)
+    fp8 = types.ModuleType("utils.runtimes.fish_audio_s2_fp8")
+    fp8.load_fp8_model = lambda *args: model
+    bnb = types.ModuleType("utils.runtimes.fish_audio_s2_bnb")
+    bnb.quantize_linear_layers = lambda source, *args: (source, 1)
+    monkeypatch.setitem(sys.modules, fp8.__name__, fp8)
+    monkeypatch.setitem(sys.modules, bnb.__name__, bnb)
+    fake_torch = SimpleNamespace(cuda=SimpleNamespace(is_available=lambda: True, get_device_capability=lambda: (8, 9)), tensor=lambda *args, **kwargs: object(), float=object())
+    monkeypatch.setattr(WORKER_MODULE, "torch", fake_torch)
+    assert WORKER_MODULE._launch_llama_queue("weights", variant, quantization, "cuda", "bf16", 8192, False) is model
+    assert inference.init_model is original_init
+    assert llama.DualARTransformer.from_pretrained is original_from_pretrained
