@@ -78,6 +78,7 @@
 - `ENGINE_COMPARISON.md`, `LANGUAGE_SUPPORT.md`, `FEATURE_COMPARISON.md` - Auto-generated tables
 
 ### Dev Docs (`docs/Dev reports/`)
+- `REGISTRY_COMPATIBILITY_PLAN.md` - File access, safe loading, config parsing, runtime installation/preferences, archive fixes, verification and Registry approval evidence
 - `tts_audio_suite_engines.yaml` - **Source of truth** for all engine metadata
 - `tts_audio_suite_aux_models.yaml` - **Source of truth** for helper/post-process model metadata
 - `SRT_IMPLEMENTATION.md` - SRT timing technical details
@@ -119,13 +120,13 @@
 - `nodes/subtitles/text_to_srt_builder_node.py` - Build SRT from transcript text plus timing data, or estimate timings from plain text
 - `nodes/subtitles/srt_advanced_options_node.py` - Subtitle readability / segmentation policy options
 - `nodes/text/tts_tag_editor_node.py` - 🏷️ Multiline TTS Tag Editor: rich text editor with character/language/parameter dropdowns, preset system, syntax highlighting, undo/redo — pairs with `web/string_multiline_tag_editor.js`
-- `nodes/step_audio_editx_special/step_audio_editx_audio_editor_node.py` - 🎨 Audio Editor: post-process ANY engine's audio with Step Audio EditX (14 emotions, 32 styles, paralinguistic effects like `<Laughter>`, speed control) — universal, not just for Step Audio EditX engine
+- `nodes/step_audio_editx_special/step_audio_editx_audio_editor_node.py` - 🎨 Audio Editor: post-process ANY engine's audio with Step Audio EditX (emotion/style, paralinguistic effects, speed); dated checkpoint choices and tags documented in `docs/STEP_AUDIO_EDITX_CHECKPOINTS.md`
 - `nodes/engines/index_tts_emotion_options_node.py` - IndexTTS-2 emotion radar chart
 
 ### Audio / Video Nodes
 - `nodes/audio/analyzer_node.py` - Audio Wave Analyzer
 - `nodes/audio/vocal_removal_node.py` - Vocal/instrumental separation
-- `nodes/audio/recorder_node.py` - Microphone recording
+- `nodes/audio/recorder_node.py` - Saved microphone clip output with independent recording, preview, and trimming controls
 - `nodes/audio/merge_audio_node.py` - Audio mixing
 - `nodes/video/mouth_movement_analyzer_node.py` - Silent speech timing extractor
 - `nodes/models/load_rvc_model_node.py` - RVC model loader
@@ -136,23 +137,26 @@
 - `unified_model_interface.py` - Universal factory pattern for all engines
 - `engine_registry.py` - Engine capability definitions
 - `factory_config.py` - standardized model load config, runtime mode/profile normalization
+- `step_audio_editx_checkpoints.py` - Dated Step Audio EditX choices and pinned Hugging Face revisions
 - `manager.py` - Model discovery and caching
 - `comfyui_model_wrapper/` - ComfyUI native model management integration
 - `extra_paths.py` - extra_model_paths.yaml support
 
 ### Isolated Runtimes (`utils/runtimes/`)
 - `profiles.py` - named runtime profiles (shared/dedicated legacy Transformers 4 environments and engine-specific runtimes)
-- `launcher.py` - runtime bootstrap, venv creation, Windows toolchain env setup
+- `launcher.py` - worker environment construction, suite-first import paths, Windows toolchain env setup
 - `session.py`, `protocol.py` - JSONL worker transport and message protocol
 - `bootstrap.py` - shared runtime bootstrap helpers
 - `vibevoice_proxy.py`, `qwen3_tts_proxy.py`, `qwen3_asr_proxy.py`, `higgs_audio_proxy.py` - parent-process proxies
-- `workers/` - worker subprocess entrypoints for VibeVoice, Qwen3-TTS, Qwen3-ASR/aligner, Higgs Audio
+- `workers/` - worker subprocess entrypoints for VibeVoice, Qwen3-TTS, Qwen3-ASR/aligner, Higgs Audio, Fish Audio S2, and Step Audio EditX; each prioritizes suite imports before third-party dependencies
 - Current shared legacy T4 runtime profile is reused by:
   - Qwen3-TTS
   - Qwen3-ASR and Granite's optional Qwen forced aligner
   - Higgs Audio 2
 
 ### Audio (`utils/audio/`)
+- `voice_capture.py`, `voice_capture_api.py` - Background microphone recording and standalone capture controls; saved clips in ComfyUI input/voice_capture/
+- `trim.py` - Shared audio-range selection for Character Voices and Voice Capture
 - `processing.py` - Tensor manipulation, normalization, format conversion
 - `cache.py` - Unified TTS caching system
 - `chunk_combiner.py` - Smart chunk combination (auto/concatenate/crossfade/silence_padding)
@@ -202,6 +206,20 @@
 - `web/asr_srt_preset_widgets.js` - ASR SRT preset locking
 
 ## Scripts & Config
+- `.comfyignore` - Registry archive exclusions for development tools and reports; keeps runtime metadata YAML, user documentation, and engine/training code
 - `scripts/bump_version_enhanced.py` - Version bump with changelog (use `patch`/`minor`/`major`)
 - `scripts/generate_engine_tables.py` - Regenerate all docs from YAML (`--readme` flag for README too)
 - `requirements.txt`, `pyproject.toml` - Dependencies and project metadata
+
+## Registry compatibility helpers
+
+- `utils/security/path_access.py` - Configured data-folder containment, link checks and safe output paths
+- `utils/security/data_loading.py` - Restricted checkpoint/dictionary/NumPy loading and scoped dependency adapters
+- `utils/security/demucs_loading.py`, `audio_separator_loading.py` - Preserve legacy separator metadata with restricted dependency loaders
+- `utils/downloads/unified_downloader.py` - Model download destinations contained in registered data folders
+- `utils/security/config_values.py` - Data-only config expressions with bounded list arithmetic
+- `utils/runtimes/bootstrap.py` - Runtime lookup/readiness only; generation never installs packages
+- `utils/runtimes/installation.py` - Installation-time preparation invoked by `install.py`
+- `utils/runtimes/settings.py`, `settings_api.py` - One persisted installation preference and same-origin UI writes
+- `web/runtime_installation_settings.js` - Shared runtime installation setting and status/cleanup details
+- `web/runtime_mode_compatibility.js` - Dedicated-to-shared migration for older workflows

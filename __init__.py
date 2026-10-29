@@ -344,6 +344,7 @@ def setup_api_routes():
         import folder_paths
         from server import PromptServer
         from aiohttp import web
+        from utils.security.path_access import resolve_input_path, filename_component, child_path
 
         def _get_ui_data_dir():
             base_dir = os.path.join(folder_paths.get_system_user_directory("tts_audio_suite"), "ui")
@@ -355,6 +356,10 @@ def setup_api_routes():
 
         from utils.voice.alias_api import register_character_alias_routes
         register_character_alias_routes(PromptServer.instance.routes, web)
+        from utils.runtimes.settings_api import register_runtime_settings_routes
+        register_runtime_settings_routes(PromptServer.instance.routes, web)
+        from utils.audio.voice_capture_api import register_voice_capture_routes
+        register_voice_capture_routes(PromptServer.instance.routes, web)
 
         @PromptServer.instance.routes.get("/api/tts-audio-suite/index-tts-emotion-presets")
         async def get_index_tts_emotion_presets_endpoint(request):
@@ -459,66 +464,6 @@ def setup_api_routes():
             except Exception as e:
                 print(f"⚠️ Error saving OmniVoice preset library: {e}")
                 return web.json_response({"status": "error", "error": str(e)}, status=500)
-
-        @PromptServer.instance.routes.get("/api/tts-audio-suite/voice-input-devices")
-        async def get_voice_input_devices_endpoint(request):
-            """Return input devices without risking a main-process PortAudio hang."""
-            try:
-                import json
-                import subprocess
-
-                probe_script = r"""
-import json
-import sounddevice as sd
-
-devices = []
-seen = set()
-for device in sd.query_devices():
-    try:
-        max_input_channels = int(device.get("max_input_channels", 0))
-    except Exception:
-        max_input_channels = 0
-    if max_input_channels <= 0:
-        continue
-
-    name = str(device.get("name", "")).strip()
-    if not name or name in seen:
-        continue
-
-    seen.add(name)
-    devices.append(name)
-
-print(json.dumps({"devices": devices}))
-"""
-
-                result = subprocess.run(
-                    [sys.executable, "-c", probe_script],
-                    capture_output=True,
-                    text=True,
-                    timeout=8,
-                    check=False,
-                )
-
-                if result.returncode != 0:
-                    stderr = (result.stderr or "").strip()
-                    stdout = (result.stdout or "").strip()
-                    error_message = stderr or stdout or f"device probe exited with code {result.returncode}"
-                    return web.json_response({"devices": [], "error": error_message}, status=500)
-
-                payload = json.loads(result.stdout or "{}")
-                devices = payload.get("devices", [])
-                if not isinstance(devices, list):
-                    devices = []
-
-                return web.json_response({"devices": devices})
-            except subprocess.TimeoutExpired:
-                return web.json_response(
-                    {"devices": [], "error": "Timed out while probing audio input devices. Leaving the dropdown on system default avoids startup hangs."},
-                    status=504,
-                )
-            except Exception as e:
-                print(f"⚠️ Error retrieving voice input devices: {e}")
-                return web.json_response({"devices": [], "error": str(e)}, status=500)
 
         @PromptServer.instance.routes.post("/api/tts-audio-suite/settings")
         async def set_inline_tag_settings_endpoint(request):
@@ -641,7 +586,8 @@ print(json.dumps({"devices": devices}))
                 if not audio_file:
                     return web.json_response({"error": "audio_file is required for preview analysis"}, status=400)
 
-                node_id = str(data.get("node_id") or "preview")
+                audio_file = resolve_input_path(audio_file)
+                node_id = filename_component(data.get("node_id") or "preview")
 
                 analyzer_node_path = os.path.join(os.path.dirname(__file__), "nodes", "audio", "analyzer_node.py")
                 spec = importlib.util.spec_from_file_location("tts_audio_suite_audio_analyzer_node", analyzer_node_path)
@@ -649,7 +595,7 @@ print(json.dumps({"devices": devices}))
                 spec.loader.exec_module(analyzer_node_module)
 
                 analyzer_node = analyzer_node_module.AudioAnalyzerNode()
-                analyzer_node.analyze_audio(
+                analysis_result = analyzer_node.analyze_audio(
                     audio_file=audio_file,
                     analysis_method=data.get("analysis_method", "silence"),
                     precision_level=data.get("precision_level", "milliseconds"),
@@ -663,7 +609,9 @@ print(json.dumps({"devices": devices}))
                 )
 
                 import folder_paths
-                cache_file = os.path.join(folder_paths.get_output_directory(), f"audio_analyzer_cache_{node_id}.json")
+                if analysis_result[1].startswith("Error:"):
+                    return web.json_response({"error": analysis_result[1]}, status=400)
+                cache_file = child_path(folder_paths.get_output_directory(), f"audio_analyzer_cache_{node_id}.json")
                 with open(cache_file, "r", encoding="utf-8") as f:
                     payload = json.load(f)
 
@@ -672,7 +620,7 @@ print(json.dumps({"devices": devices}))
                 return response
             except Exception as e:
                 print(f"⚠️ Audio analyzer preview failed: {e}")
-                return web.json_response({"error": str(e)}, status=500)
+                return web.json_response({"error": str(e)}, status=400 if isinstance(e, (ValueError, FileNotFoundError)) else 500)
 
         @PromptServer.instance.routes.get("/api/tts-audio-suite/training-progress")
         async def get_training_progress_endpoint(request):

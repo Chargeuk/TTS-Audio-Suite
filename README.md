@@ -7,7 +7,7 @@
 [![Dynamic TOML Badge][version-shield]][version-url]
 [![Ko-Fi](https://img.shields.io/badge/Ko--fi-F16061?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/diogogo)
 
-# TTS Audio Suite v5.8.11
+# TTS Audio Suite v5.10.5
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/diogogo)
 
@@ -246,8 +246,8 @@ For comprehensive technical information, refer to the [SRT_IMPLEMENTATION.md](do
 This is the new architectural baseline for the suite.
 
 * **Main environment moved forward**: the primary ComfyUI environment is now meant to run on **Transformers 5**
-* **Isolation for fragile engines**: engines that still behave better on the older stack can use **shared** or **dedicated** legacy runtimes instead of forcing the whole suite backward
-* **Cleaner engine strategy**: modern engines such as **Higgs Audio v3**, **Step Audio EditX**, **MOSS-TTS**, and other compatible stacks can stay native in the main environment
+* **Isolation for fragile engines**: engines that still behave better on the older stack can use **a shared** legacy runtime instead of forcing the whole suite backward
+* **Cleaner engine strategy**: modern engines such as **Higgs Audio v3**, **MOSS-TTS**, and other compatible stacks can stay native in the main environment
 * **Less dependency deadlock**: adding new engines no longer has to mean globally freezing the entire project to one old Transformers version
 
 This matters because the suite now has a clearer split:
@@ -305,6 +305,7 @@ dataset formats, training workflow, adapter loading, and CPU-safe preflight.
 * **Audio Wave Analyzer**: Interactive waveform visualization for precise timing extraction
 * **Multi-language Support**: English, German, Spanish, French, Japanese models
 * **Speech Editing Workflows**: Advanced F5-TTS editing capabilities
+* **Reference preparation**: [F5-TTS Reference and Inference Guidelines](docs/F5_TTS_REFERENCE_GUIDE.md)
 
 </details>
 
@@ -443,15 +444,14 @@ VibeVoice and KugelAudio run directly in the suite's Transformers 5 main environ
 <details>
 <summary><h3>Character and Narrator Switching</h3></summary>
 
-**NEW in v3.1.0**: Seamless character switching for both F5TTS and ChatterBox engines!
+Use shared `[CharacterName]` tags in TTS Text and TTS SRT to switch between saved voices. Engine and mode determine reference requirements and supported languages.
 
 * **Multi-Character Support**: Use `[CharacterName]` tags to switch between different voices
 * **Voice Folder Integration**: Organized character voice management system
-* **🏷️ Character Aliases**: User-friendly alias system - use `[Alice]` instead of `[female_01]` with `#character_alias_map.txt`
-* **Robust Fallback**: Graceful handling when characters not found (no errors!)
-* **Universal Compatibility**: Works with both F5TTS and ChatterBox TTS engines
+* **🏷️ Character Alias Manager**: Visually assign voices and languages to names such as `[Alice]` → [demo and setup](docs/CHARACTER_SWITCHING_GUIDE.md#aliases-optional)
+* **Narrator Fallback**: Unknown character names use the narrator voice with a warning
+* **Language Tags**: Request a supported language with `[de:Alice]`
 * **SRT Integration**: Character switching within subtitle timing
-* **Backward Compatible**: Existing workflows work unchanged
 
 **📖 [Complete Character Switching Guide](docs/CHARACTER_SWITCHING_GUIDE.md)**
 
@@ -811,9 +811,10 @@ Welcome to our show! [Alice:happy_sarah] I'm so excited to be here!
 **NEW in v4.15**: Revolutionary LLM-based audio post-processing with emotion, style, and paralinguistic control!
 
 * **🎨 Step Audio EditX - Audio Editor Node**: Post-process ANY TTS audio with advanced editing capabilities
-* **🗣️ Paralinguistic Effects**: Insert natural sounds - Laughter, Breathing, Sigh, Uhm, Surprise (oh/ah/wa), Confirmation, Question, Dissatisfaction
-* **😊 14 Emotion Controls**: happy, sad, angry, excited, calm, fearful, surprised, disgusted, confusion, empathy, embarrass, depressed, coldness, admiration
-* **🎭 32 Speaking Styles**: whisper, serious, child, older, girl, pure, sister, sweet, exaggerated, ethereal, generous, recite, act_coy, warm, shy, comfort, authority, chat, radio, soulful, gentle, story, vivid, program, news, advertising, roar, murmur, shout, deeply, loudly, arrogant, friendly
+* **📅 Dated Checkpoints**: Choose `2026-01-23` (default for new engine nodes) or `2025-11-28` in the existing model dropdown. Downloads use pinned revisions and separate folders; existing unversioned/local selections keep their files. [Checkpoint guide](docs/STEP_AUDIO_EDITX_CHECKPOINTS.md).
+* **🗣️ Paralinguistic Effects**: Original tags plus January sounds such as `<giggle>`, `<chuckle>`, `<inhale>`, `<exhale>`, `<cough>`, and `<clears_throat>`; iteration syntax remains available, e.g. `<giggle:2>`.
+* **😊 Emotion Controls**: happy, sad, angry, excited, fear, humour, surprised, disgusted, confusion, empathy, embarrass, depressed, coldness, admiration; older `calm` and `fearful` options remain accepted
+* **🎭 Speaking Styles**: whisper, serious, child, older, girl, pure, sister, sweet, exaggerated, ethereal, generous, recite, act_coy, warm, shy, comfort, authority, chat, radio, soulful, gentle, story, vivid, program, news, advertising, roar, murmur, shout, deeply, loudly, arrogant, friendly
 * **⚡ Speed Control**: faster, slower, more_faster, more_slower with multi-iteration support
 * **🔊 Voice Restoration**: ChatterBox VC integration to restore original voice resemblance after editing
 * **🏷️ Inline Edit Tags**: Apply effects directly in text using `<Laughter:2>`, `<emotion:happy>`, `<style:whisper>` tags
@@ -1036,6 +1037,8 @@ Per-segment overrides are supported with `[]` parameter syntax for whole-segment
 * [📖 MOSS Training Guide](docs/MOSS_TRAINING_GUIDE.md)
 * [📖 Parameter Switching Guide](docs/PARAMETER_SWITCHING_GUIDE.md)
 
+**Load-time quantization:** The engine's optional `quantization` selector offers `none` (default), `bnb_int8`, and `bnb_nf4`. INT8/NF4 quantize the language backbone when loading the original checkpoint and keep it quantized between runs. They require an NVIDIA CUDA GPU, BitsAndBytes, and Accelerate. Audio prediction heads remain at the selected floating dtype, and the shared audio tokenizer stays on CPU. Quantization reduces weight memory, but generation still needs additional VRAM and speed/quality can change. Clear VRAM releases quantized weights; the next generation reloads them. The selector is appended after existing widgets so older workflows retain their saved values and default to `none`.
+
 **Training status:**
 
 * **Initial MOSS LoRA training support is now integrated** through the unified `🎓 Model Training` flow.
@@ -1216,6 +1219,31 @@ Perfect for:
 - 🟢 **RVC voice conversion**: ✅ Working  
 - 🟢 **OpenSeeFace mouth movement**: ✅ Working (experimental)
 - 🔴 **MediaPipe mouth movement**: ❌ Incompatible (use OpenSeeFace)
+
+### Shared Runtime installation
+
+**Most users can keep the defaults.** Manager prepares one Shared Runtime during installation or updates. Qwen3-TTS/ASR, Step Audio EditX, Higgs Audio 2, and forced alignment reuse it. Model weights download only when needed. Running a workflow or restarting ComfyUI does not install Python packages.
+
+If an engine reports that Shared Runtime is missing or needs repair, enable **Install shared runtime automatically** under **Settings > TTS Audio Suite > Runtime installation**, then repair/reinstall TTS Audio Suite through Manager. Restart when Manager requests it.
+
+<details>
+<summary>Advanced: skip installation or remove an unused shared runtime</summary>
+
+Turn off **Install shared runtime automatically** in the setting above to skip preparation during future installs and updates. Engines still set to Shared Runtime can use an existing environment; the setting does not switch engines to Main Environment.
+
+Open **TTS Audio Suite > Runtime installation details** from ComfyUI's menu to see the configuration file, runtime folder, and installation status. To reclaim the runtime's space, turn off automatic installation, close ComfyUI, and manually delete the displayed **shared_legacy_t4** folder. Model weights and voice files are separate. Engines set to Shared Runtime need that environment restored before they can run again.
+
+To skip the first installation, create this file before installing the suite:
+
+**ComfyUI/user/__tts_audio_suite/runtime_settings.json**
+
+```json
+{"install_shared_runtime": false}
+```
+
+The UI and installer read the same file. With a custom ComfyUI user directory, use its **__tts_audio_suite** folder. After the suite has loaded, it remembers that location for Manager updates and reinstalls. Before the first installation with a custom user directory, set **TTS_AUDIO_SUITE_USER_DIRECTORY** to that directory in the installer's environment.
+
+</details>
 
 ### Option 2: Manual Installation
 
@@ -1416,7 +1444,12 @@ Core TTS installation will continue; only the listed features may be unavailable
 
 A common problem is installing dependencies in the wrong Python environment. Always ensure you are installing dependencies within your ComfyUI's Python environment.
 
-If the engine comparison table shows **`Shared`** or **`Dedicated`** in the **Isolation** column, that engine has its own secondary-environment path for dependency conflicts. Configure that on the engine node with `⚠️ Runtime Isolation` instead of trying to downgrade your main ComfyUI environment.
+Where an engine offers **⚠️ Runtime Isolation**, there are two choices:
+
+- **Main Environment** uses ComfyUI's installed Python packages.
+- **⚠️ Shared Runtime** uses one support environment shared by compatible engines, helping avoid dependency conflicts. Keep the engine's default unless you need to change it.
+
+Older workflows that selected Dedicated Runtime now use Shared Runtime. Their other settings stay in place. Existing dedicated folders are kept; after closing ComfyUI, you can delete an unused dedicated folder to reclaim its space. Keep the **shared_legacy_t4** folder if you use Shared Runtime.
 
 * **Verify your Python environment:** After activating your venv or navigating to your portable ComfyUI installation, check the Python executable being used:
   
@@ -1534,7 +1567,7 @@ For offline/manual setup:
 | VibeVoice | `ComfyUI/models/TTS/VibeVoice/` | ✅ | 1.5B and 7B variants |
 | RVC | `ComfyUI/models/TTS/RVC/` | ✅* | Base models auto; character `.pth` can be user-provided |
 | IndexTTS-2 | `ComfyUI/models/TTS/IndexTTS/` | ✅ | Emotion components included |
-| Step Audio EditX | `ComfyUI/models/TTS/step_audio_editx/` | ✅ | Main model + tokenizer stack |
+| Step Audio EditX | `ComfyUI/models/TTS/step_audio_editx/` | ✅ | Lazy dated checkpoints + tokenizer stack; unversioned installs retained |
 | CosyVoice3 | `ComfyUI/models/TTS/CosyVoice/` | ✅ | Variant-specific lazy downloads |
 | Qwen3-TTS / ASR | `ComfyUI/models/TTS/qwen3_tts/` | ✅ | Per-variant download + shared tokenizer |
 | MOSS-TTS | `ComfyUI/models/TTS/moss_tts/` | ✅ | Local/Delay/VoiceGenerator/SoundEffect v1/TTSD models plus shared MOSS-Audio-Tokenizer codec |

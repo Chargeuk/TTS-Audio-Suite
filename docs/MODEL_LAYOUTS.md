@@ -104,17 +104,11 @@ ComfyUI/models/voices/
 
 Requirements:
 
-- WAV, clean speech, 5-30s (24kHz recommended).
+- Clean speech, shorter than 12 seconds, with a little trailing silence.
 - Text must match spoken audio.
 - Naming: `name.wav` + `name.reference.txt` (preferred) or `name.txt`.
 
-Inference guidelines:
-
-1. Keep reference audio under ~12s with a little trailing silence.
-2. Use uppercase letter-by-letter only when desired.
-3. Use spaces/punctuation for explicit pauses.
-4. Keep a space after sentence-ending punctuation.
-5. For Chinese output, preprocess numbers if needed.
+See [F5-TTS Reference and Inference Guidelines](F5_TTS_REFERENCE_GUIDE.md) for sample rates, reference clipping, pacing, and text preparation.
 
 ## Higgs Audio 2
 
@@ -194,14 +188,20 @@ Notes:
 
 ```text
 ComfyUI/models/TTS/step_audio_editx/
-├── Step-Audio-EditX/
+├── Step-Audio-EditX-2026-01-23/
+│   └── CosyVoice-300M-25Hz/
+├── Step-Audio-EditX-2025-11-28/  # downloaded only when selected
+│   └── CosyVoice-300M-25Hz/
+├── Step-Audio-EditX/             # existing unversioned installations
 │   └── CosyVoice-300M-25Hz/
 └── FunASR-Paraformer/
 ```
 
 Notes:
 
-- Main model, tokenizer assets, and speech stack auto-download.
+- Selected checkpoints and tokenizer assets auto-download at pinned revisions.
+- Existing unversioned/local weights are retained and folders are not relabeled; known config compatibility fields may be normalized.
+- See [Step Audio EditX checkpoints](STEP_AUDIO_EDITX_CHECKPOINTS.md) for selection and expanded tags.
 
 ## Higgs Audio v3
 

@@ -5,6 +5,114 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.10.5] - 2026-10-24
+
+### Fixed
+
+- Fix TTS Text narrator dropdown showing only none when another extension registers nonstandard model-folder metadata (#375)
+- Fix shared model-path validation failing during OmniVoice loading in affected installations while preserving file-access restrictions
+## [5.10.4] - 2026-10-17
+
+### Fixed
+
+- Fix IndexTTS-2 and IndexTTS-2.5 retaining GPU memory after unloading (PR #373, thanks @wandermyz)
+- Fix IndexTTS-2 low-VRAM mode loading all model components onto the GPU after a reload
+- Fix IndexTTS accelerated generation keeping extra GPU memory occupied after unloading
+## [5.10.3] - 2026-10-15
+
+### Added
+
+- Add MOSS-TTS live INT8 and 4-bit NF4 quantization to reduce GPU memory use with existing checkpoints
+- Add MOSS-TTS quantization options for speech, TTSD dialogue, Voice Designer, and Sound Effects v1
+
+### Changed
+
+- Improve MOSS-TTS quantized model unloading and reloading while preserving existing workflow settings
+## [5.10.2] - 2026-10-10
+
+### Added
+
+- Add Voice Capture playback, waveform preview, and start/end trimming controls
+
+### Changed
+
+- Improve Voice Capture so recording saves a clip without running the workflow
+- Update Voice Capture workflows to use the saved clip only when the user clicks Run; existing workflows need an initial recording
+
+### Fixed
+
+- Fix Voice Capture unused bottom space and allow resizing down to the preview controls
+## [5.10.1] - 2026-10-10
+
+### Fixed
+
+- Fix Voice Capture reusing an old recording when running an unchanged workflow
+- Fix Voice Capture requiring a setting change before recording again
+## [5.10.0] - 2026-10-09
+
+### Added
+
+- Shared Runtime installation controls and suite security improvements
+- Add automatic Shared Runtime setup during TTS Audio Suite installation and updates, with a ComfyUI setting and file option to skip it.
+
+### Changed
+
+- Improve runtime behavior so workflows use prepared environments without installing Python packages.
+- Improve file access and model loading across TTS, voice conversion, audio tools, and training to reject unsafe paths and executable checkpoint objects while keeping supported weight formats.
+
+### Fixed
+
+- Fix Registry packages missing guides and workflows with Unicode filenames, and exclude development-only files from published packages.
+
+### Removed
+
+- Remove Dedicated Runtime choices from Qwen3-TTS and Step Audio EditX; existing workflows migrate to Shared Runtime without moving other settings.
+## [5.9.3] - 2026-10-08
+
+### Fixed
+
+- Fix isolated TTS worker startup failures from conflicting Python modules
+- Fix Qwen3-TTS and Voice Design failing on first use or after Step Audio EditX with utils is not a package
+- Fix conflicting module paths affecting all isolated TTS and ASR workers
+- Fix isolated workers losing ComfyUI imports when their working directory changes
+- Fix Step Audio EditX importing bundled modules during model discovery
+- Fix Step Audio EditX CPU and MPS device patch not targeting the bundled encoder
+## [5.9.2] - 2026-10-04
+
+### Fixed
+
+- Fix Classic ChatterBox crashing during short or consecutive speech segments (PR #368, thanks @melayyoub)
+- Fix Classic ChatterBox short segments being replaced with silence by the old workaround
+- Fix ChatterBox Classic and Official 23-Lang unclear failures when generation produces no usable speech; report a clear error instead
+
+### Removed
+
+- Remove Classic ChatterBox's old protection template and automatic short-text padding from Text and SRT; existing workflows remain compatible
+## [5.9.1] - 2026-10-04
+
+### Fixed
+
+- Fix ChatterBox Classic SRT cache reuse during character and language switching
+- Fix unnecessary language model loading when ChatterBox Classic SRT speech is already cached
+- Fix ChatterBox Classic pause processing ignoring the disabled audio-cache setting
+## [5.9.0] - 2026-10-03
+
+### Added
+
+- Add Step Audio EditX checkpoint selection and expanded sound editing
+- Add dated 2026-01-23 and 2025-11-28 Step Audio EditX model choices with separate downloads
+- Add expanded Step Audio EditX sound tags, including giggle, chuckle, clears throat, and new vocal reactions
+- Add new Step Audio EditX sounds plus fear and humour emotions to the Multiline TTS Tag Editor
+
+### Changed
+
+- Improve Step Audio EditX model documentation and editor help while preserving existing workflow widget order and installed weights
+
+### Fixed
+
+- Fix Step Audio EditX Audio Editor ignoring the connected engine's selected model
+- Fix stale Step Audio EditX edits when changing models or generation settings
+- Fix ChatterBox v2/v3 native sound tags being treated as Step Audio EditX edits
 ## [5.8.11] - 2026-09-19
 
 ### Added

@@ -9,11 +9,11 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-import torch
-
+# Prioritize suite packages even when already present later in PYTHONPATH.
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
+
+import torch
 
 from utils.runtimes.protocol import RuntimeJobResponse
 
@@ -35,7 +35,7 @@ def _load_ref_audio(payload: Optional[Dict[str, Any]]) -> Any:
         tensor_path = payload.get("tensor_path")
         if not tensor_path:
             raise RuntimeError("tensor_path payload missing file path")
-        tensor_payload = torch.load(tensor_path, map_location="cpu")
+        tensor_payload = torch.load(tensor_path, map_location="cpu", weights_only=True)
         waveform = tensor_payload["waveform"]
         if isinstance(waveform, torch.Tensor):
             waveform = waveform.squeeze().cpu().numpy()

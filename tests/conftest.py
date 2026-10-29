@@ -42,17 +42,25 @@ if 'folder_paths' not in sys.modules:
     mock_input_dir = tempfile.mkdtemp(prefix="tts_suite_test_input_")
     mock_output_dir = tempfile.mkdtemp(prefix="tts_suite_test_output_")
     mock_temp_dir = tempfile.mkdtemp(prefix="tts_suite_test_temp_")
+    mock_user_dir = tempfile.mkdtemp(prefix="tts_suite_test_user_")
 
     mock_folder_paths.models_dir = mock_models_dir
     mock_folder_paths.input_directory = mock_input_dir
     mock_folder_paths.output_directory = mock_output_dir
     mock_folder_paths.temp_directory = mock_temp_dir
 
-    mock_folder_paths.get_folder_paths = lambda *args, **kwargs: []
-    mock_folder_paths.add_model_folder_path = lambda *args, **kwargs: None
+    mock_folder_paths.folder_names_and_paths = {}
+    def add_test_model_folder_path(name, path, is_default=False):
+        paths, extensions = mock_folder_paths.folder_names_and_paths.setdefault(name, ([], set()))
+        if path not in paths:
+            paths.insert(0 if is_default else len(paths), path)
+    mock_folder_paths.get_folder_paths = lambda name: mock_folder_paths.folder_names_and_paths.get(name, ([], set()))[0]
+    mock_folder_paths.add_model_folder_path = add_test_model_folder_path
     mock_folder_paths.get_input_directory = lambda: mock_input_dir
     mock_folder_paths.get_output_directory = lambda: mock_output_dir
     mock_folder_paths.get_temp_directory = lambda: mock_temp_dir
+    mock_folder_paths.get_user_directory = lambda: mock_user_dir
+    mock_folder_paths.get_system_user_directory = lambda name="system": os.path.join(mock_user_dir, f"__{name}")
     mock_folder_paths.get_annotated_filepath = lambda path: path
     mock_folder_paths.exists_annotated_filepath = lambda path: os.path.exists(path)
 

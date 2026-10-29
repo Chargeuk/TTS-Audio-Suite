@@ -6,14 +6,15 @@ import traceback
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+# Prioritize suite packages even when already present later in PYTHONPATH.
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(PROJECT_ROOT))
+
 import torch
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
 QWEN3_ASR_IMPL = PROJECT_ROOT / "engines" / "qwen3_asr" / "impl"
 if str(QWEN3_ASR_IMPL) not in sys.path:
-    sys.path.insert(0, str(QWEN3_ASR_IMPL))
+    sys.path.insert(1, str(QWEN3_ASR_IMPL))
 
 from utils.runtimes.protocol import RuntimeJobResponse
 
@@ -60,7 +61,7 @@ def _load_audio_payload(payload: Dict[str, Any]) -> List[Any]:
             items.append(item.get("audio_path"))
             continue
         if kind == "tensor_path":
-            tensor_payload = torch.load(item["tensor_path"], map_location="cpu")
+            tensor_payload = torch.load(item["tensor_path"], map_location="cpu", weights_only=True)
             waveform = tensor_payload["waveform"]
             if isinstance(waveform, torch.Tensor):
                 waveform = waveform.squeeze().cpu().numpy()
