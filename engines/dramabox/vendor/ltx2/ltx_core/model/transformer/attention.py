@@ -89,7 +89,23 @@ class XFormersAttention(AttentionCallable):
             mask = mask_out[..., : mask.shape[-1]]
             mask = mask.expand(b, heads, -1, -1)
 
-        out = memory_efficient_attention(q.to(target_dtype), k.to(target_dtype), v, attn_bias=mask, p=0.0)
+        q, k = q.to(target_dtype), k.to(target_dtype)
+        try:
+            out = memory_efficient_attention(q, k, v, attn_bias=mask, p=0.0)
+        except NotImplementedError:
+            if not torch.is_tensor(mask):
+                raise
+            # SM120 xFormers kernels can handle unmasked attention but reject
+            # dense Tensor bias. Preserve that native path and use equivalent
+            # real SDPA only for this unsupported masked operation.
+            out = torch.nn.functional.scaled_dot_product_attention(
+                q.transpose(1, 2),
+                k.transpose(1, 2),
+                v.transpose(1, 2),
+                attn_mask=mask,
+                dropout_p=0.0,
+                is_causal=False,
+            ).transpose(1, 2)
         out = out.reshape(b, -1, heads * dim_head)
         return out
 
