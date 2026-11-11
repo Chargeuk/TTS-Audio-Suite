@@ -30,7 +30,7 @@ class TTSAudioInstaller:
 
     # Bump when the install procedure itself gains or changes dependencies.
     # This keeps normal ComfyUI patch updates on the fast path.
-    INSTALL_STATE_VERSION = 2
+    INSTALL_STATE_VERSION = 3
 
     CORE_MODULE_CHECKS = (
         ("torch", "PyTorch"),
@@ -1006,69 +1006,51 @@ class TTSAudioInstaller:
                 "WARNING",
             )
 
+    def numpy_stack_conflicts(self):
+        """Check declared compatibility without importing potentially broken binaries."""
+        from importlib.metadata import PackageNotFoundError, requires, version
+        from packaging.requirements import Requirement
+        conflicts = []
+        for package in ("numba", "scipy", "librosa"):
+            try:
+                version(package)
+                for text in requires(package) or []:
+                    requirement = Requirement(text)
+                    if requirement.name.lower() not in ("numpy", "numba", "llvmlite", "scipy"):
+                        continue
+                    if requirement.marker and not requirement.marker.evaluate():
+                        continue
+                    installed = version(requirement.name)
+                    if installed not in requirement.specifier:
+                        conflicts.append(f"{package} requires {requirement}; installed {installed}")
+            except PackageNotFoundError as exc:
+                conflicts.append(str(exc))
+        return conflicts
+
     def install_numpy_with_constraints(self):
-        """Install numpy with version constraints for compatibility"""
-        self.log("Checking numpy compatibility", "INFO")
-        
-        # Python 3.13+ requires numpy 2.1.0 or newer (no wheels for 1.26.x)
-        if self.python_version >= (3, 13):
-            minimum_numpy = "numpy>=2.1.0,<2.3.0"
-            self.log("Python 3.13+ detected - requires NumPy 2.1.0 or newer", "INFO")
-        else:
-            minimum_numpy = "numpy>=1.26.4,<2.3.0"
-        
-        # Check if numpy is already installed and what version
+        """Preserve supported NumPy and resolve its actual audio-stack requirements."""
+        from importlib.metadata import PackageNotFoundError, version
+        from packaging.specifiers import SpecifierSet
+        numpy_range = ">=2.1.0,<3" if self.python_version >= (3, 13) else ">=1.26.4,<3"
+        numpy_requirement = f"numpy{numpy_range}"
         try:
-            import numpy
-            numpy_version = numpy.__version__
-            self.log(f"Current numpy version: {numpy_version}", "INFO")
-            
-            # Parse numpy version
-            import re
-            version_match = re.match(r'(\d+)\.(\d+)', numpy_version)
-            if version_match:
-                major, minor = int(version_match.group(1)), int(version_match.group(2))
-                
-                # Python 3.13+ specific check
-                if self.python_version >= (3, 13) and major < 2:
-                    self.log(f"NumPy {numpy_version} is incompatible with Python 3.13+", "ERROR")
-                    self.log("Python 3.13 requires NumPy 2.1.0 or newer (no wheels for 1.26.x)", "WARNING")
-                    numpy_constraint = minimum_numpy
-                # Accept both numpy 1.26.x and 2.x.x (but not 2.3.x) for older Python
-                elif major == 1 and minor >= 26 and self.python_version < (3, 13):
-                    self.log(f"NumPy {numpy_version} is compatible - keeping current version", "INFO")
-                    return  # NumPy 1.26.x is fine for Python < 3.13
-                elif major == 2 and minor < 3:
-                    self.log(f"NumPy {numpy_version} is compatible - keeping current version", "INFO")
-                    return  # NumPy 2.0.x, 2.1.x, 2.2.x are fine
-                elif major >= 2 and minor >= 3:
-                    # Only numpy 2.3+ needs downgrading
-                    self.log(f"NumPy {numpy_version} may cause issues - constraining to <2.3.0", "WARNING")
-                    numpy_constraint = minimum_numpy
-                else:
-                    # Very old numpy needs updating
-                    self.log(f"NumPy {numpy_version} is too old", "WARNING")
-                    numpy_constraint = minimum_numpy
-            else:
-                # Can't parse version - install safe range
-                numpy_constraint = minimum_numpy
-                
-        except ImportError:
-            # No numpy installed - install with appropriate constraints
-            self.log("NumPy not found - installing with appropriate constraints", "INFO")
-            numpy_constraint = minimum_numpy
-        except Exception as e:
-            # NumPy import failed
-            self.log(f"NumPy check failed ({e}) - installing safe version", "WARNING")
-            numpy_constraint = minimum_numpy
-        
-        # Only install/upgrade numpy if needed
-        if 'numpy_constraint' in locals():
-            self.run_pip_command(["install", numpy_constraint], "Installing numpy with version constraints")
-        
-        # Note: We're not forcing numba installation anymore since we disable JIT anyway
-        self.log("NumPy compatibility check complete", "INFO")
-    
+            installed = version("numpy")
+            if installed in SpecifierSet(numpy_range):
+                numpy_requirement = f"numpy=={installed}"
+                conflicts = self.numpy_stack_conflicts()
+                if not conflicts:
+                    self.log(f"NumPy {installed}: installed audio-stack requirements satisfied", "SUCCESS")
+                    return
+                for conflict in conflicts:
+                    self.log(conflict, "WARNING")
+        except PackageNotFoundError:
+            pass
+        # Resolve together; pin an already supported NumPy to avoid silent downgrades.
+        self.run_pip_command(
+            ["install", numpy_requirement, "numba", "scipy", "librosa"],
+            "Resolving compatible NumPy/Numba audio dependencies",
+        )
+
     def install_audio_separator_if_compatible(self):
         """Install audio-separator only if numpy version supports it"""
         try:
@@ -1702,32 +1684,34 @@ class TTSAudioInstaller:
                 self.log(f"wandb reinstallation still has issues: {retry_error}", "ERROR")
                 self.log("Some F5-TTS and Higgs features may not work properly", "WARNING")
 
-    def handle_python_313_specific(self):
-        """Handle Python 3.13 specific compatibility issues"""
-        if not self.is_python_313:
-            self.log("Python < 3.13 detected, skipping 3.13-specific workarounds", "INFO")
-            return
-            
-        self.log("Python 3.13 detected - applying compatibility measures", "WARNING")
-        
-        # MediaPipe is incompatible - inform user about OpenSeeFace alternative
-        self.log("MediaPipe is incompatible with Python 3.13", "WARNING")
-        self.log("OpenSeeFace will be used automatically for mouth movement analysis", "INFO")
-        self.log("Note: OpenSeeFace is experimental and may be less accurate than MediaPipe", "WARNING")
-        
-        # OpenSeeFace only needs an ONNX Runtime provider. Do not replace a working GPU install.
-        if self.has_onnxruntime_provider():
-            if self.check_package_installed("onnxruntime-gpu>=1.19.0"):
-                self.log("Python 3.13: onnxruntime-gpu already available - skipping CPU reinstall", "SUCCESS")
-            else:
-                self.log("Python 3.13: onnxruntime already available - skipping reinstall", "SUCCESS")
-            return
-
-        self.run_pip_command(
-            ["install", "onnxruntime", "--no-deps"],
-            "Installing onnxruntime for OpenSeeFace (Python 3.13)",
-            ignore_errors=True
-        )
+    def install_mediapipe(self, upgrade=False):
+        """Optional face tracking; preserve existing MediaPipe and NumPy/OpenCV."""
+        if not upgrade and self.check_package_installed("mediapipe"):
+            self.log("Keeping installed MediaPipe (legacy and Tasks APIs supported)", "INFO")
+            return True
+        from importlib.metadata import version
+        # Tasks uses standard cv2 operations. Installing upstream's contrib
+        # distribution over an existing cv2 provider can overwrite its binaries.
+        if not self.module_available("cv2"):
+            if not self.run_pip_command(["install", "opencv-python<5", "--no-deps"],
+                                        "Installing OpenCV for face tracking", ignore_errors=True):
+                return False
+        with tempfile.TemporaryDirectory(prefix="tts_mediapipe_") as temp_dir:
+            constraints = Path(temp_dir) / "constraints.txt"
+            constraints.write_text(f"numpy=={version('numpy')}\n", encoding="utf-8")
+            deps = ["absl-py~=2.3", "certifi", "sounddevice~=0.5",
+                    "flatbuffers~=25.9", "matplotlib"]
+            ready = self.run_pip_command(
+                ["install", *deps, "-c", str(constraints)],
+                "Installing MediaPipe Tasks dependencies", ignore_errors=True)
+            if ready:
+                ready = self.run_pip_command(
+                    ["install", "mediapipe==1.2.0", "--no-deps"],
+                    "Installing MediaPipe Tasks without replacing NumPy/OpenCV", ignore_errors=True)
+        if not ready:
+            self.add_install_warning("MediaPipe (optional)",
+                                     "MediaPipe installation failed; OpenSeeFace remains available.")
+        return ready
 
     def validate_installation(self):
         """Validate package presence without importing heavyweight runtimes."""
@@ -1773,14 +1757,6 @@ class TTSAudioInstaller:
             )
             self.log(warning, "WARNING")
         
-        # Check Python 3.13 specific validations
-        if self.is_python_313:
-            if self.module_available("onnxruntime"):
-                self.log("ONNXRuntime (OpenSeeFace): OK", "SUCCESS")
-            else:
-                validation_errors.append("ONNXRuntime required for OpenSeeFace on Python 3.13")
-                self.log("ONNXRuntime (OpenSeeFace): FAILED", "ERROR")
-        
         # Check RVC dependencies
         rvc_modules = [("monotonic_alignment_search", "Monotonic Alignment Search")]
         for module_name, display_name in rvc_modules:
@@ -1793,21 +1769,20 @@ class TTSAudioInstaller:
         return len(validation_errors) == 0
 
     def check_version_conflicts(self):
-        """Check for known version conflicts"""
-        self.log("Checking for version conflicts...", "INFO")
-
+        """Report actual audio-stack conflicts instead of a fixed NumPy minor cap."""
+        from importlib.metadata import PackageNotFoundError, version
+        from packaging.specifiers import SpecifierSet
+        numpy_range = ">=2.1.0,<3" if self.python_version >= (3, 13) else ">=1.26.4,<3"
         try:
-            from importlib.metadata import version, PackageNotFoundError
-            numpy_version_text = version("numpy")
-            numpy_version = tuple(map(int, numpy_version_text.split('.')[:2]))
-
-            if numpy_version >= (2, 3):
-                self.log(f"WARNING: NumPy {numpy_version_text} detected - may cause numba conflicts", "WARNING")
-                self.log("Consider downgrading: pip install 'numpy>=2.2.0,<2.3.0'", "WARNING")
-            else:
-                self.log(f"NumPy {numpy_version_text}: Version OK for compatibility", "SUCCESS")
-
-        except (PackageNotFoundError, ImportError, ValueError):
+            installed = version("numpy")
+            conflicts = self.numpy_stack_conflicts()
+            if installed not in SpecifierSet(numpy_range):
+                conflicts.append(f"NumPy {installed} is outside supported range {numpy_range}")
+            for conflict in conflicts:
+                self.log(conflict, "WARNING")
+            if not conflicts:
+                self.log(f"NumPy {installed}: audio-stack dependency metadata compatible", "SUCCESS")
+        except PackageNotFoundError:
             self.log("NumPy not found - this will cause issues", "ERROR")
 
     def prepare_shared_runtime(self):
@@ -1840,23 +1815,8 @@ class TTSAudioInstaller:
         if self.is_macos:
             print(f">>> Platform: macOS ({platform.machine()})")
         
-        if self.is_python_313:
-            print("\n" + "-"*50)
-            print("   PYTHON 3.13 COMPATIBILITY STATUS")
-            print("-"*50)
-            print("  [+] Python 3.13 compatibility workarounds applied")
-            print("  [+] OpenSeeFace mouth movement: WORKING (experimental)")
-            print("  [+] Numba/Librosa compatibility: FIXED")
-            print("      -> Automatic JIT disabling for Python 3.13")
-            print("  [X] MediaPipe mouth movement: INCOMPATIBLE")
-            print("      -> Use OpenSeeFace alternative")
-            print("\n>> Want MediaPipe Python 3.13 support? Vote at:")
-            print("   https://github.com/google-ai-edge/mediapipe/issues/5708")
-        else:
-            print("\n" + "-"*50)
-            print("   CORE COMPATIBILITY STATUS")
-            print("-"*50)
-            print("  [+] Core compatibility checks completed")
+        print("\n  Mouth analysis supports MediaPipe Tasks and legacy FaceMesh.")
+        print("  OpenSeeFace remains an alternative; availability depends on installed packages.")
 
         print("\n" + "-"*50)
         print("   EXTERNAL ENGINE RUNTIME CHECKS")
@@ -1931,7 +1891,7 @@ def main():
             installer.install_indexts_text_processing()  # Install IndexTTS-2 text normalization with fallback
             installer.install_russian_text_stresser_support()  # Install lightweight Russian stress package for Official 23-Lang
             installer.handle_wandb_issues()  # Fix wandb circular import
-            installer.handle_python_313_specific()
+            installer.install_mediapipe()
         
         # Check the shared profile even when main dependencies took the fast path.
         installer.prepare_shared_runtime()

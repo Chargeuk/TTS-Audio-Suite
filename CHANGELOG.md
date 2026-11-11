@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.10.8] - 2026-11-05
+
+### Changed
+
+- Update IndexTTS streaming and low-VRAM tooltips
+
+### Fixed
+
+- Fix IndexTTS streaming generation failures
+- Fix IndexTTS crashes when stream_return is enabled
+
+### Removed
+
+- Remove the unused more_segment_before control while preserving saved workflows
+## [5.10.7] - 2026-10-31
+
+### Changed
+
+- Improve Silent Speech Analyzer phrase grouping across brief mouth closures
+- Update MediaPipe installation to preserve existing NumPy and OpenCV packages
+- Update viseme and word-prediction descriptions to clarify experimental limitations
+
+### Fixed
+
+- Fix Silent Speech Analyzer compatibility with current MediaPipe releases
+- Fix OpenSeeFace video previews and crashes when word prediction is enabled
+- Fix Silent Speech Analyzer cached timing and movement outputs when filter settings change
+## [5.10.6] - 2026-10-31
+
+### Fixed
+
+- Fix TTS Audio Suite installation unnecessarily downgrading compatible NumPy 2.3+ environments
+- Fix TTS Audio Suite audio dependency checks while retaining the NumPy major-version compatibility boundary
+- Fix Step Audio EditX and OpenSeeFace use of removed NumPy aliases
+- Fix VoiceFixer startup and model downloads when ComfyUI launches without activating its Python environment
+- Fix ChatterBox, F5-TTS, Higgs Audio 2, RVC and VibeVoice bundled imports and preserve ComfyUI utility modules
 ## [5.10.5] - 2026-10-24
 
 ### Fixed

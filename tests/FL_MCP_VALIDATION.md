@@ -18,6 +18,8 @@ Do not use FL-MCP as a replacement for efficient terminal work. Avoid fetching f
 
 ## Preconditions
 
+- After changing runtime profiles or the base dependency environment, check `runtime_is_ready(profile, base_python=configured_test_python)` for affected installed runtimes before handing workflows to the user. Profile changes invalidate saved runtime metadata even if no runtime packages were directly changed. Repair through the installation entry point and verify effective package versions; server health and node registration do not establish worker readiness.
+
 - Use the canonical Windows ComfyUI installation documented in the repository instructions.
 - ComfyUI starts with TTS Audio Suite enabled and no suite import errors.
 - FL-MCP is installed according to its upstream documentation.
@@ -87,6 +89,10 @@ REST access does not imply browser/canvas access. Before starting the implementa
 4. Run the capability audit and verify the same session reports both frontend and MCP connections.
 
 The browser stores its session ID in local storage, so normal ComfyUI restarts and browser refreshes should retain it. If the browser session is reset or a different browser/profile is used, update the MCP client configuration and restart that client again.
+
+## Preview delivery check
+
+For generated media previews, verify the returned UI filename/subfolder/type through ComfyUI `/view` and decode the served bytes. A local file or successful encoder alone does not prove the frontend can retrieve the artifact. Keep this check separate from the user's visual quality test.
 
 ## Validation Layers
 
